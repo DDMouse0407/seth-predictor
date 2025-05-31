@@ -6,4 +6,5 @@ matplotlib
 beautifulsoup4
 requests
 cloudscraper
-selenium undetected-chromedriver
+selenium
+undetected-chromedriver
