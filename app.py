@@ -5,7 +5,6 @@ from analyzer import train_xgb_model, predict_jackpot, simulate_ai_play
 from scraper_haoting import parse_haoting_page
 
 st.set_page_config(page_title="戰神塞特爆金預測系統", layout="wide")
-
 st.title("🎰 戰神塞特爆金預測系統 v2.0")
 st.markdown("參考來源：`haoting.info/nickaa`，整合爆金預測 AI + 大數據分析 + 可視化功能")
 
@@ -14,7 +13,6 @@ mode = st.sidebar.selectbox("請選擇操作模式：", [
     "首頁總覽", "爆發查詢", "AI 模型訓練", "AI 模擬下注", "資料更新（自動爬蟲）", "爆發趨勢圖表"
 ])
 
-# 讀取資料
 @st.cache_data
 def load_data():
     try:
@@ -22,7 +20,6 @@ def load_data():
     except:
         return pd.DataFrame(columns=["日期", "局數", "爆金", "小分", "免費遊戲", "爆發指數"])
 
-# 首頁
 if mode == "首頁總覽":
     st.subheader("📊 系統概況與資料統計")
     df = load_data()
@@ -35,7 +32,6 @@ if mode == "首頁總覽":
     else:
         st.info("尚無資料，請先更新或上傳。")
 
-# 爆金預測查詢
 elif mode == "爆發查詢":
     st.subheader("🧠 爆金機率即時預測")
     with st.form("predict_form"):
@@ -57,14 +53,12 @@ elif mode == "爆發查詢":
         else:
             st.success(f"預測：{'💥 爆金' if pred else '❌ 未爆'}，機率：{prob*100:.2f}%")
 
-# 模型訓練
 elif mode == "AI 模型訓練":
     st.subheader("🤖 AI 模型訓練器")
     if st.button("重新訓練模型（含最新資料）"):
         result = train_xgb_model()
         st.write(result)
 
-# 模擬下注
 elif mode == "AI 模擬下注":
     st.subheader("🎮 AI 自動下注模擬器")
     capital = st.number_input("初始資金", value=1000)
@@ -74,7 +68,6 @@ elif mode == "AI 模擬下注":
         result = simulate_ai_play(capital=int(capital), rounds=int(rounds), bet_unit=int(bet_unit))
         st.text_area("模擬結果紀錄：", result, height=500)
 
-# 資料更新
 elif mode == "資料更新（自動爬蟲）":
     st.subheader("🌐 自動擷取 haoting 最新資料")
     if st.button("開始抓取"):
@@ -85,7 +78,6 @@ elif mode == "資料更新（自動爬蟲）":
         else:
             st.warning("未取得新資料，請稍後再試。")
 
-# 趨勢圖表
 elif mode == "爆發趨勢圖表":
     st.subheader("📈 爆發指數趨勢可視化")
     df = load_data()

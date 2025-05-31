@@ -1,7 +1,7 @@
 streamlit
 pandas
-numpy
-scikit-learn
 xgboost
+scikit-learn
 matplotlib
 beautifulsoup4
+requests
