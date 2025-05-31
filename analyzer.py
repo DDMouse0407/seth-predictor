@@ -1,118 +1,96 @@
+import streamlit as st
 import pandas as pd
-import numpy as np
 import datetime
-import random
-import os
-import xgboost as xgb
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
+from analyzer import analyze_latest_data, simulate_data, train_xgb_model, predict_jackpot, simulate_ai_play
+from scraper_haoting import parse_haoting_page
 
-# 假資料模擬函式（保留但不使用）
-def simulate_data(n=20):
-    today = datetime.date.today()
-    data = []
-    for i in range(n):
-        date = today - datetime.timedelta(days=i)
-        plays = random.randint(30, 100)
-        free_game_triggered = random.randint(0, 1)
-        small_hit = random.randint(0, 1)
-        jackpot = 1 if free_game_triggered and random.random() > 0.7 else 0
-        burst_index = (plays * 0.05 + small_hit * 10 + jackpot * 50) / 100
-        data.append({
-            "日期": date.strftime('%Y-%m-%d'),
+st.set_page_config(page_title="戰神塞特爆金預測系統", layout="wide")
+
+st.title("🎰 戰神塞特爆金預測系統 v2.0")
+st.markdown("開發參考：`haoting.info/nickaa`，自製預測引擎 + 模擬分析 + 爆發建議")
+
+# Sidebar 選單
+st.sidebar.header("🔧 模式選擇")
+mode = st.sidebar.selectbox("請選擇功能模式：", ["首頁總覽", "模擬分析", "爆發查詢", "AI 模型訓練", "AI 模擬下注", "資料更新（自動爬蟲）"])
+
+# 假資料讀取
+def load_history():
+    try:
+        return pd.read_csv("data/history.csv")
+    except:
+        return pd.DataFrame(columns=["日期", "局數", "爆金", "小分", "免費遊戲", "爆發指數"])
+
+# 首頁顯示內容
+if mode == "首頁總覽":
+    st.subheader("📊 系統概況與分析紀錄")
+    data = load_history()
+    st.metric("總紀錄場次", len(data))
+    st.metric("爆金總次數", data['爆金'].sum())
+    st.metric("預測平均命中率", f"{(data['爆金'].sum() / len(data) * 100 if len(data)>0 else 0):.2f}%")
+
+    st.markdown("---")
+    st.markdown("#### 📈 最近分析紀錄")
+    if not data.empty:
+        st.dataframe(data.tail(10).sort_values(by="日期", ascending=False))
+    else:
+        st.info("尚無資料，請先進行模擬分析或手動輸入。")
+
+# 模擬分析頁面
+elif mode == "模擬分析":
+    st.subheader("🔮 爆金模擬分析器")
+    if st.button("執行模擬分析"):
+        df = simulate_data()
+        st.success("模擬資料產生完成")
+        st.dataframe(df.tail(10))
+
+# 爆發查詢頁面
+elif mode == "爆發查詢":
+    st.subheader("🧠 爆發機率預測查詢")
+    with st.form("predict_form"):
+        plays = st.number_input("局數", min_value=0, value=50)
+        free_game = st.selectbox("免費遊戲是否觸發", [0, 1])
+        small_hit = st.selectbox("是否小分", [0, 1])
+        burst_index = st.number_input("爆發指數 (可選填)", value=round(plays * 0.05 + small_hit * 10 + free_game * 50, 2))
+        submitted = st.form_submit_button("進行預測")
+
+    if submitted:
+        input_data = {
             "局數": plays,
-            "免費遊戲": free_game_triggered,
+            "免費遊戲": free_game,
             "小分": small_hit,
-            "爆金": jackpot,
-            "爆發指數": round(burst_index, 2)
-        })
+            "爆發指數": burst_index
+        }
+        pred, prob = predict_jackpot(input_data)
+        if pred == -1:
+            st.error(prob)
+        else:
+            st.success(f"預測結果：{'💥 爆金' if pred == 1 else '❌ 未爆'}，爆金機率：{prob*100:.2f}%")
 
-    df = pd.DataFrame(data[::-1])
-    os.makedirs("data", exist_ok=True)
-    df.to_csv("data/history.csv", index=False)
-    return df
+# AI 模型訓練頁面
+elif mode == "AI 模型訓練":
+    st.subheader("🤖 AI 模型訓練模組")
+    if st.button("訓練模型（含 haoting 資料）"):
+        result = train_xgb_model()
+        st.write(result)
 
-# 最新資料分析邏輯（可擴充）
-def analyze_latest_data():
-    try:
-        df = pd.read_csv("data/history.csv")
-        latest = df.iloc[-1]
-        msg = f"最近日期：{latest['日期']}，局數：{latest['局數']}，爆發指數：{latest['爆發指數']}"
-        return msg
-    except Exception as e:
-        return f"資料讀取失敗：{str(e)}"
+# 模擬下注頁面
+elif mode == "AI 模擬下注":
+    st.subheader("🎮 AI 自動模擬下注")
+    st.markdown("AI 根據 haoting 實際資料自動判斷每局是否下注，並計算收益。")
+    capital = st.number_input("起始資金", value=1000)
+    rounds = st.number_input("模擬局數", value=50, step=10)
+    bet_unit = st.number_input("單次下注金額", value=10)
+    if st.button("開始模擬"):
+        result = simulate_ai_play(capital=int(capital), rounds=int(rounds), bet_unit=int(bet_unit))
+        st.text_area("模擬結果", result, height=500)
 
-# AI 模型訓練函式（整合 haoting 外部資料）
-def train_xgb_model():
-    try:
-        df1 = pd.read_csv("data/history.csv") if os.path.exists("data/history.csv") else pd.DataFrame()
-        df2 = pd.read_csv("data/haoting_data.csv") if os.path.exists("data/haoting_data.csv") else pd.DataFrame()
-
-        df = pd.concat([df1, df2], ignore_index=True)
-        df = df.dropna()
-        if df.empty:
-            return "❌ 資料不足，無法訓練模型"
-
-        X = df[["局數", "免費遊戲", "小分", "爆發指數"]]
-        y = df["爆金"]
-
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        model = xgb.XGBClassifier(use_label_encoder=False, eval_metric='logloss')
-        model.fit(X_train, y_train)
-
-        preds = model.predict(X_test)
-        acc = accuracy_score(y_test, preds)
-
-        os.makedirs("model", exist_ok=True)
-        model.save_model("model/xgb_model.json")
-        return f"✅ 模型訓練完成（整合 haoting + 自己資料），準確率：{acc*100:.2f}%"
-    except Exception as e:
-        return f"❌ 模型訓練失敗：{str(e)}"
-
-# 模型預測函式
-def predict_jackpot(input_data):
-    try:
-        model = xgb.XGBClassifier()
-        model.load_model("model/xgb_model.json")
-        prediction = model.predict(pd.DataFrame([input_data]))
-        prob = model.predict_proba(pd.DataFrame([input_data]))[0][1]
-        return int(prediction[0]), prob
-    except Exception as e:
-        return -1, f"預測失敗：{str(e)}"
-
-# AI 幫你模擬連續下注策略（不會輸光光）
-def simulate_ai_play(capital=1000, rounds=100, bet_unit=10):
-    try:
-        model = xgb.XGBClassifier()
-        model.load_model("model/xgb_model.json")
-        df = pd.read_csv("data/haoting_data.csv") if os.path.exists("data/haoting_data.csv") else pd.DataFrame()
-        if df.empty:
-            return "❌ 沒有資料可模擬"
-
-        log = []
-        success = 0
-
-        for i in range(min(rounds, len(df))):
-            row = df.iloc[i]
-            input_data = {
-                "局數": row["局數"],
-                "免費遊戲": row["免費遊戲"],
-                "小分": row["小分"],
-                "爆發指數": row["爆發指數"]
-            }
-            pred, prob = predict_jackpot(input_data)
-            if prob > 0.7 and capital >= bet_unit:
-                capital -= bet_unit
-                if row["爆金"] == 1:
-                    capital += bet_unit * 5  # 假設爆金 5 倍回報
-                    result = f"✅ 爆金 +{bet_unit * 4}"
-                    success += 1
-                else:
-                    result = "❌ 未爆 -10"
-            else:
-                result = "🔍 觀望"
-            log.append(f"第{i+1}局｜預測爆金率：{prob*100:.2f}%｜{result}｜資金：${capital}")
-
-        return "\n".join(log + [f"\n📊 爆金命中次數：{success} / {rounds}｜結餘資金：${capital}"])
-    except Exception as e:
-        return f"模擬錯誤：{str(e)}"
+# 自動爬蟲資料更新
+elif mode == "資料更新（自動爬蟲）":
+    st.subheader("🌐 從 haoting 網站即時更新資料")
+    if st.button("開始抓取最新資料"):
+        df = parse_haoting_page()
+        if not df.empty:
+            st.success(f"成功更新 {len(df)} 筆資料！")
+            st.dataframe(df.head())
+        else:
+            st.warning("抓取失敗或無新資料。")
