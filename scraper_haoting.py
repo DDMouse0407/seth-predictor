@@ -24,7 +24,7 @@ def parse_haoting_page(url="https://ww.haoting.info/nickaa"):
             data.append([date, plays, jackpot, small, free, burst_index])
 
         df = pd.DataFrame(data, columns=["日期", "局數", "爆金", "小分", "免費遊戲", "爆發指數"])
-        df.to_csv(\"data/haoting_data.csv\", index=False)
+        df.to_csv("data/haoting_data.csv", index=False)
         return df
     except Exception as e:
         print(\"錯誤：\", e)
