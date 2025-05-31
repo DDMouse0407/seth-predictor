@@ -1,4 +1,3 @@
-
 import pandas as pd
 import numpy as np
 import datetime
@@ -8,7 +7,7 @@ import xgboost as xgb
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 
-# 假資料模擬函式
+# 假資料模擬函式（保留但不使用）
 def simulate_data(n=20):
     today = datetime.date.today()
     data = []
@@ -28,7 +27,7 @@ def simulate_data(n=20):
             "爆發指數": round(burst_index, 2)
         })
 
-    df = pd.DataFrame(data[::-1])  # 時間升序排列
+    df = pd.DataFrame(data[::-1])
     os.makedirs("data", exist_ok=True)
     df.to_csv("data/history.csv", index=False)
     return df
@@ -43,10 +42,17 @@ def analyze_latest_data():
     except Exception as e:
         return f"資料讀取失敗：{str(e)}"
 
-# AI 模型訓練函式
+# AI 模型訓練函式（整合 haoting 外部資料）
 def train_xgb_model():
     try:
-        df = pd.read_csv("data/history.csv")
+        df1 = pd.read_csv("data/history.csv") if os.path.exists("data/history.csv") else pd.DataFrame()
+        df2 = pd.read_csv("data/haoting_data.csv") if os.path.exists("data/haoting_data.csv") else pd.DataFrame()
+
+        df = pd.concat([df1, df2], ignore_index=True)
+        df = df.dropna()
+        if df.empty:
+            return "❌ 資料不足，無法訓練模型"
+
         X = df[["局數", "免費遊戲", "小分", "爆發指數"]]
         y = df["爆金"]
 
@@ -59,7 +65,7 @@ def train_xgb_model():
 
         os.makedirs("model", exist_ok=True)
         model.save_model("model/xgb_model.json")
-        return f"✅ 模型訓練完成，準確率：{acc*100:.2f}%"
+        return f"✅ 模型訓練完成（整合 haoting + 自己資料），準確率：{acc*100:.2f}%"
     except Exception as e:
         return f"❌ 模型訓練失敗：{str(e)}"
 
@@ -73,3 +79,40 @@ def predict_jackpot(input_data):
         return int(prediction[0]), prob
     except Exception as e:
         return -1, f"預測失敗：{str(e)}"
+
+# AI 幫你模擬連續下注策略（不會輸光光）
+def simulate_ai_play(capital=1000, rounds=100, bet_unit=10):
+    try:
+        model = xgb.XGBClassifier()
+        model.load_model("model/xgb_model.json")
+        df = pd.read_csv("data/haoting_data.csv") if os.path.exists("data/haoting_data.csv") else pd.DataFrame()
+        if df.empty:
+            return "❌ 沒有資料可模擬"
+
+        log = []
+        success = 0
+
+        for i in range(min(rounds, len(df))):
+            row = df.iloc[i]
+            input_data = {
+                "局數": row["局數"],
+                "免費遊戲": row["免費遊戲"],
+                "小分": row["小分"],
+                "爆發指數": row["爆發指數"]
+            }
+            pred, prob = predict_jackpot(input_data)
+            if prob > 0.7 and capital >= bet_unit:
+                capital -= bet_unit
+                if row["爆金"] == 1:
+                    capital += bet_unit * 5  # 假設爆金 5 倍回報
+                    result = f"✅ 爆金 +{bet_unit * 4}"
+                    success += 1
+                else:
+                    result = "❌ 未爆 -10"
+            else:
+                result = "🔍 觀望"
+            log.append(f"第{i+1}局｜預測爆金率：{prob*100:.2f}%｜{result}｜資金：${capital}")
+
+        return "\n".join(log + [f"\n📊 爆金命中次數：{success} / {rounds}｜結餘資金：${capital}"])
+    except Exception as e:
+        return f"模擬錯誤：{str(e)}"
