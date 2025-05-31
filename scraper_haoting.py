@@ -1,5 +1,8 @@
 import requests
 import pandas as pd
+import cloudscraper
+scraper = cloudscraper.create_scraper()
+res = scraper.get("https://ww.haoting.info/nickaa")
 from bs4 import BeautifulSoup
 from datetime import datetime
 
