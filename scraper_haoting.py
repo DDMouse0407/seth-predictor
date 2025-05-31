@@ -27,5 +27,5 @@ def parse_haoting_page(url="https://ww.haoting.info/nickaa"):
         df.to_csv("data/haoting_data.csv", index=False)
         return df
     except Exception as e:
-        print(\"錯誤：\", e)
+        print("錯誤：", e)
         return pd.DataFrame()
