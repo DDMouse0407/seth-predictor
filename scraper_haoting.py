@@ -23,7 +23,7 @@ def parse_haoting_page(url="https://ww.haoting.info/nickaa"):
             burst_index = round(plays * 0.05 + small * 10 + free * 50, 2)
             data.append([date, plays, jackpot, small, free, burst_index])
 
-        df = pd.DataFrame(data, columns=[\"日期\", \"局數\", \"爆金\", \"小分\", \"免費遊戲\", \"爆發指數\"])
+        df = pd.DataFrame(data, columns=["日期", "局數", "爆金", "小分", "免費遊戲", "爆發指數"])
         df.to_csv(\"data/haoting_data.csv\", index=False)
         return df
     except Exception as e:
