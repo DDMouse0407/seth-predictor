@@ -17,9 +17,9 @@ def parse_haoting_page(url="https://ww.haoting.info/nickaa"):
             if len(cols) < 5: continue
             date = datetime.now().strftime("%Y-%m-%d")
             plays = int(cols[1].text.strip())
-            small = 1 if \"小分\" in cols[2].text else 0
-            free = 1 if \"免費\" in cols[2].text else 0
-            jackpot = 1 if \"爆\" in cols[3].text else 0
+            small = 1 if \"小分" in cols[2].text else 0
+            free = 1 if \"免費" in cols[2].text else 0
+            jackpot = 1 if \"爆" in cols[3].text else 0
             burst_index = round(plays * 0.05 + small * 10 + free * 50, 2)
             data.append([date, plays, jackpot, small, free, burst_index])
 
