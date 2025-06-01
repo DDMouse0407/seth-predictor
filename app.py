@@ -1,95 +1,100 @@
 import streamlit as st
+import requests
 import pandas as pd
-import matplotlib.pyplot as plt
-from analyzer import train_xgb_model, predict_jackpot, simulate_ai_play
-from scraper_haoting import parse_haoting_page
+from datetime import datetime
+from bs4 import BeautifulSoup
+import joblib
+import numpy as np
 
-st.set_page_config(page_title="戰神塞特爆金預測系統", layout="wide")
-st.title("🎰 戰神塞特爆金預測系統 v2.0")
-st.markdown("參考來源：`haoting.info/nickaa`，整合爆金預測 AI + 大數據分析 + 可視化功能")
+st.set_page_config(page_title="賽特分析系統 - 自動序號工具", layout="centered")
+st.title("🔑 賽特序號自動分析工具 v2.0")
+st.markdown("請輸入每日序號與帳號資訊，系統將自動送出分析請求並擷取爆金資料與預測下一局爆發機率。")
 
-st.sidebar.header("🔧 功能選擇")
-mode = st.sidebar.selectbox("請選擇操作模式：", [
-    "首頁總覽", "爆發查詢", "AI 模型訓練", "AI 模擬下注", "資料更新（自動爬蟲）", "爆發趨勢圖表"
-])
-
-@st.cache_data
-def load_data():
+@st.cache_resource
+def load_model():
     try:
-        return pd.read_csv("data/haoting_data.csv")
+        return joblib.load("xgb_burst_predictor.pkl")
     except:
-        return pd.DataFrame(columns=["日期", "局數", "爆金", "小分", "免費遊戲", "爆發指數"])
+        return None
 
-if mode == "首頁總覽":
-    st.subheader("📊 系統概況與資料統計")
-    df = load_data()
-    st.metric("總場次", len(df))
-    st.metric("爆金次數", df['爆金'].sum())
-    st.metric("爆金機率", f"{(df['爆金'].mean()*100 if len(df)>0 else 0):.2f}%")
-    st.markdown("#### 🔍 最新紀錄")
-    if not df.empty:
-        st.dataframe(df.tail(10).sort_values(by="日期", ascending=False))
-    else:
-        st.info("尚無資料，請先更新或上傳。")
+model = load_model()
 
-elif mode == "爆發查詢":
-    st.subheader("🧠 爆金機率即時預測")
-    with st.form("predict_form"):
-        plays = st.number_input("局數", min_value=0, value=50)
-        free_game = st.selectbox("免費遊戲是否觸發", [0, 1])
-        small_hit = st.selectbox("是否為小分", [0, 1])
-        burst_index = st.number_input("爆發指數", value=round(plays * 0.05 + small_hit * 10 + free_game * 50, 2))
-        submitted = st.form_submit_button("進行預測")
-    if submitted:
-        input_data = {
-            "局數": plays,
-            "免費遊戲": free_game,
-            "小分": small_hit,
-            "爆發指數": burst_index
+with st.form("serial_form"):
+    serial = st.text_input("今日序號", placeholder="例如：115511")
+    account = st.text_input("會員帳號", placeholder="例如：moneymm258")
+    amount = st.text_input("設定金額", value="1000")
+    table = st.text_input("桌號", value="109")
+    device = st.selectbox("裝置類型", ["ios", "android", "pc"])
+    game = st.selectbox("選擇遊戲", ["ATG-賽特", "ATG-其他"])
+    submitted = st.form_submit_button("🚀 開始分析")
+
+if submitted:
+    with st.spinner("正在提交序號並擷取分析結果..."):
+        payload = {
+            "serial": serial,
+            "device": device,
+            "account": account,
+            "amount": amount,
+            "game": game,
+            "table": table
         }
-        pred, prob = predict_jackpot(input_data)
-        if pred == -1:
-            st.error(prob)
-        else:
-            st.success(f"預測：{'💥 爆金' if pred else '❌ 未爆'}，機率：{prob*100:.2f}%")
+        try:
+            res = requests.post("https://haoting.info/verifySerial.php", data=payload)
+            if res.status_code == 200:
+                soup = BeautifulSoup(res.text, "html.parser")
+                icons = soup.find_all("img")
 
-elif mode == "AI 模型訓練":
-    st.subheader("🤖 AI 模型訓練器")
-    if st.button("重新訓練模型（含最新資料）"):
-        result = train_xgb_model()
-        st.write(result)
+                results = []
+                level_map = {
+                    "無爆發": 0,
+                    "Big Win": 1,
+                    "Super Win": 2,
+                    "Mega Win": 3,
+                    "Ultra Win": 4,
+                    "Legendary Win": 5,
+                }
 
-elif mode == "AI 模擬下注":
-    st.subheader("🎮 AI 自動下注模擬器")
-    capital = st.number_input("初始資金", value=1000)
-    rounds = st.number_input("模擬局數", value=50, step=10)
-    bet_unit = st.number_input("單注金額", value=10)
-    if st.button("開始模擬"):
-        result = simulate_ai_play(capital=int(capital), rounds=int(rounds), bet_unit=int(bet_unit))
-        st.text_area("模擬結果紀錄：", result, height=500)
+                for icon in icons:
+                    src = icon.get("src")
+                    if src:
+                        if "legendary" in src.lower():
+                            win_type = "Legendary Win"
+                        elif "ultra" in src.lower():
+                            win_type = "Ultra Win"
+                        elif "mega" in src.lower():
+                            win_type = "Mega Win"
+                        elif "super" in src.lower():
+                            win_type = "Super Win"
+                        elif "big" in src.lower():
+                            win_type = "Big Win"
+                        else:
+                            win_type = "無爆發"
 
-elif mode == "資料更新（自動爬蟲）":
-    st.subheader("🌐 自動擷取 haoting 最新資料")
-    if st.button("開始抓取"):
-        df = parse_haoting_page()
-        if not df.empty:
-            st.success(f"成功擷取 {len(df)} 筆資料")
-            st.dataframe(df.head())
-        else:
-            st.warning("未取得新資料，請稍後再試。")
+                        results.append({
+                            "時間": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            "爆發等級": win_type,
+                            "圖片": src,
+                            "數值": level_map.get(win_type, 0)
+                        })
 
-elif mode == "爆發趨勢圖表":
-    st.subheader("📈 爆發指數趨勢可視化")
-    df = load_data()
-    try:
-        df = df.tail(100).reset_index()
-        fig, ax1 = plt.subplots()
-        ax1.plot(df.index, df['爆發指數'], color='blue')
-        ax2 = ax1.twinx()
-        ax2.plot(df.index, df['爆金'], color='red', linestyle='dashed')
-        ax1.set_xlabel("場次")
-        ax1.set_ylabel("爆發指數")
-        ax2.set_ylabel("爆金結果")
-        st.pyplot(fig)
-    except Exception as e:
-        st.error(f"繪圖失敗：{e}")
+                if results:
+                    df = pd.DataFrame(results)
+                    st.success("🎉 爆金資料擷取成功！")
+                    st.dataframe(df)
+                    csv = df.to_csv(index=False).encode("utf-8")
+                    st.download_button("📥 下載結果 CSV", data=csv, file_name="haoting_data.csv", mime="text/csv")
+
+                    if model:
+                        X_input = np.array(df["數值"].tail(5)).reshape(1, -1)
+                        if X_input.shape[1] < 5:
+                            X_input = np.pad(X_input, ((0,0),(5-X_input.shape[1],0)))
+                        pred = model.predict_proba(X_input)[0][1]
+                        st.markdown(f"### 🤖 AI 預測下一局爆金機率：**{pred*100:.2f}%**")
+                    else:
+                        st.warning("尚未載入 AI 模型，請確認 xgb_burst_predictor.pkl 存在於目錄中。")
+                else:
+                    st.warning("未偵測到爆金資訊圖片，可能本次無爆發等級資料。")
+            else:
+                st.error(f"分析失敗，狀態碼：{res.status_code}")
+        except Exception as e:
+            st.error(f"發生錯誤：{e}")
