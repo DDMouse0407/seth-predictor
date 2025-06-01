@@ -7,13 +7,14 @@ import joblib
 import numpy as np
 import re
 import os
+from replay_analyzer import analyze_replay_url
+
 st.set_page_config(page_title="賽特分析系統 - 自動序號工具", layout="centered")
 st.title("🔑 賽特序號自動分析工具 v2.6")
 st.markdown("請輸入每日序號與帳號資訊，系統將自動送出分析請求、擷取爆金圖片與影片回放網址，結合 AI 預測與下注建議，並持續記錄強化學習。")
 
 @st.cache_resource
 
-from replay_analyzer import analyze_replay_url
 def load_model():
     try:
         return joblib.load("xgb_burst_predictor.pkl")
