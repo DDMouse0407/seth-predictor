@@ -8,3 +8,5 @@ requests
 cloudscraper
 selenium
 undetected-chromedriver
+joblib
+numpy
