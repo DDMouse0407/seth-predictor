@@ -8,7 +8,7 @@ import numpy as np
 import re
 import os
 
-from replay_analyzer import analyze_replay_url
+from replay_utils import analyze_replay_url
 
 st.set_page_config(page_title="賽特分析系統 - 自動序號工具", layout="centered")
 st.title("🔑 賽特序號自動分析工具 v2.6")
