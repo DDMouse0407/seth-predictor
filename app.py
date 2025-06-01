@@ -5,10 +5,14 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 import joblib
 import numpy as np
+import re
+import os
+
+from replay_analyzer import analyze_replay_url
 
 st.set_page_config(page_title="賽特分析系統 - 自動序號工具", layout="centered")
-st.title("🔑 賽特序號自動分析工具 v2.0")
-st.markdown("請輸入每日序號與帳號資訊，系統將自動送出分析請求並擷取爆金資料與預測下一局爆發機率。")
+st.title("🔑 賽特序號自動分析工具 v2.6")
+st.markdown("請輸入每日序號與帳號資訊，系統將自動送出分析請求、擷取爆金圖片與影片回放網址，結合 AI 預測與下注建議，並持續記錄強化學習。")
 
 @st.cache_resource
 def load_model():
@@ -16,6 +20,20 @@ def load_model():
         return joblib.load("xgb_burst_predictor.pkl")
     except:
         return None
+
+def save_daily_training_data(record):
+    file = "daily_training_log.csv"
+    df = pd.DataFrame([record])
+    if os.path.exists(file):
+        df.to_csv(file, mode="a", header=False, index=False)
+    else:
+        df.to_csv(file, index=False)
+
+def make_betting_decision(prob, threshold=0.6):
+    if prob >= threshold:
+        return f"✅ 建議下注（信心值 {prob*100:.1f}%）"
+    else:
+        return f"⛔ 建議觀望（信心值 {prob*100:.1f}%）"
 
 model = load_model()
 
@@ -43,6 +61,7 @@ if submitted:
             if res.status_code == 200:
                 soup = BeautifulSoup(res.text, "html.parser")
                 icons = soup.find_all("img")
+                links = soup.find_all("a", href=True)
 
                 results = []
                 level_map = {
@@ -77,6 +96,12 @@ if submitted:
                             "數值": level_map.get(win_type, 0)
                         })
 
+                replay_urls = []
+                for a in links:
+                    href = a["href"]
+                    if "godeebxp.com/egames" in href and "egyptian-mythology" in href:
+                        replay_urls.append(href)
+
                 if results:
                     df = pd.DataFrame(results)
                     st.success("🎉 爆金資料擷取成功！")
@@ -89,11 +114,31 @@ if submitted:
                         if X_input.shape[1] < 5:
                             X_input = np.pad(X_input, ((0,0),(5-X_input.shape[1],0)))
                         pred = model.predict_proba(X_input)[0][1]
+                        decision = make_betting_decision(pred)
+
                         st.markdown(f"### 🤖 AI 預測下一局爆金機率：**{pred*100:.2f}%**")
+                        st.markdown(f"### 💰 自動下注建議：{decision}")
+
+                        save_daily_training_data({
+                            "日期時間": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            "序號": serial,
+                            "帳號": account,
+                            "爆發分數陣列": df["數值"].tolist(),
+                            "爆金機率": round(pred, 4),
+                            "下注建議": decision
+                        })
                     else:
                         st.warning("尚未載入 AI 模型，請確認 xgb_burst_predictor.pkl 存在於目錄中。")
                 else:
                     st.warning("未偵測到爆金資訊圖片，可能本次無爆發等級資料。")
+
+                if replay_urls:
+                    st.markdown("---")
+                    st.markdown("### 🎞️ 偵測到回放網址：")
+                    for url in replay_urls:
+                        label = analyze_replay_url(url)
+                        st.write(f"{url} 👉 分析結果：**{label}**")
+
             else:
                 st.error(f"分析失敗，狀態碼：{res.status_code}")
         except Exception as e:
